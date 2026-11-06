@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Brasileirão do Projeto Cruzeirinho — Bom de Bola, Bom na Escola</title>
+    <meta name="description" content="Brasileirão do Projeto Cruzeirinho - Bom de Bola, Bom na Escola. O maior campeonato amador da região, focado na inclusão e no esporte." />
+    <meta property="og:title" content="Brasileirão do Projeto Cruzeirinho — Bom de Bola, Bom na Escola" />
+    <meta property="og:description" content="Brasileirão do Projeto Cruzeirinho - Bom de Bola, Bom na Escola. O maior campeonato amador da região, focado na inclusão e no esporte." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/assets/aistudio/1779882264991_35858112.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="/assets/aistudio/1779882264991_35858112.png" />
+    <meta name="theme-color" content="#1e3a8a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Cruzeirinho" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" href="/assets/aistudio/1779882264991_35858112.png" />
+    <link rel="apple-touch-icon" href="/assets/aistudio/1779882264991_35858112.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-gray-50 text-gray-900 antialiased selection:bg-blue-200">
+    <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,109 @@
+{
+  "inscricoes": [],
+  "atletas": [
+    {
+      "equipeId": null,
+      "responsavel": "Aline dos Santos",
+      "nota": 3,
+      "id": "atl-1793762869609",
+      "gols": 0,
+      "categoria": "SUB-16",
+      "tipo": "Normal",
+      "nome": "Thales Leonel Leite dos Santos",
+      "assistencias": 0
+    }
+  ],
+  "equipes": [
+    {
+      "categoria": "SUB-16",
+      "nome": "Corinthians",
+      "corPrincipal": "#000000",
+      "id": "eq-1793620734203"
+    },
+    {
+      "id": "eq-1793620747791",
+      "nome": "Cruzeiro",
+      "corPrincipal": "#0000ff",
+      "categoria": "SUB-16"
+    },
+    {
+      "nome": "Flamengo",
+      "categoria": "SUB-16",
+      "id": "eq-1793620796341",
+      "corPrincipal": "#ff0000"
+    },
+    {
+      "corPrincipal": "#ededed",
+      "nome": "Red Bull",
+      "id": "eq-sub11-1",
+      "categoria": "SUB-9"
+    },
+    {
+      "categoria": "SUB-9",
+      "id": "eq-sub11-2",
+      "corPrincipal": "#ff9e17",
+      "nome": "Fluminense"
+    },
+    {
+      "nome": "Palmeiras",
+      "categoria": "SUB-9",
+      "corPrincipal": "#16a34a",
+      "id": "eq-sub11-3"
+    },
+    {
+      "categoria": "SUB-11",
+      "corPrincipal": "#000000",
+      "nome": "Atlético Mineiro",
+      "id": "eq-sub11-4"
+    },
+    {
+      "id": "eq-sub16-1",
+      "corPrincipal": "#00ffff",
+      "categoria": "SUB-9",
+      "nome": "Bahia"
+    },
+    {
+      "id": "eq-sub16-2",
+      "corPrincipal": "#b91c1c",
+      "nome": "Atlético Paranaense",
+      "categoria": "SUB-11"
+    },
+    {
+      "id": "eq-sub16-3",
+      "corPrincipal": "#ededed",
+      "categoria": "SUB-11",
+      "nome": "São Paulo"
+    },
+    {
+      "corPrincipal": "#ffff00",
+      "categoria": "SUB-11",
+      "id": "eq-sub16-4",
+      "nome": "Mirassol"
+    },
+    {
+      "nome": "Gremio",
+      "id": "eq-sub9-1",
+      "corPrincipal": "#00ffff",
+      "categoria": "SUB-11"
+    },
+    {
+      "nome": "Internacional",
+      "corPrincipal": "#dc2626",
+      "id": "eq-sub9-2",
+      "categoria": "SUB-9"
+    },
+    {
+      "id": "eq-sub9-3",
+      "corPrincipal": "#00ff00",
+      "nome": "Curitiba",
+      "categoria": "SUB-16"
+    },
+    {
+      "nome": "Santos",
+      "id": "eq-sub9-4",
+      "categoria": "SUB-16",
+      "corPrincipal": "#e8e8e8"
+    }
+  ],
+  "partidas": []
+}

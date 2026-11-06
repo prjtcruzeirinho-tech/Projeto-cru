@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'douglasleonelleite485@gmail.com' ||
+        (request.auth.token.keys().hasAll(['email']) && request.auth.token.email.matches('.*@cruzeirinho\\.com$'))
+      );
+    }
+
+    // Inscrições: público pode submeter (create), todos com link podem ler o comprovante, admin pode gerenciar
+    match /inscricoes/{inscricaoId} {
+      allow read: if true;
+      allow create: if isValidId(inscricaoId) &&
+        request.resource.data.keys().hasAll(['id', 'nome', 'nascimento', 'responsavel', 'whatsapp', 'categoria', 'tipo', 'status', 'dataEnvio']) &&
+        request.resource.data.nome is string && request.resource.data.nome.size() <= 100 &&
+        request.resource.data.categoria in ['SUB-9', 'SUB-11', 'SUB-16'] &&
+        request.resource.data.tipo in ['Normal', 'Solidária'] &&
+        request.resource.data.status in [
+          'Pendente', 'Aprovada', 'Recusada', 
+          'Aguardando Pagamento', 'Aguardando Conferência', 'Comprovante Rejeitado',
+          'Pagamento Aprovado', 'Inscrição Confirmada', 
+          'Inscrição Solidária em Análise', 'Inscrição Solidária Aprovada', 
+          'Pagamento Recusado ou Cancelado'
+        ];
+      allow update, delete: if true; // Permite aprovações e edições via app
+    }
+
+    // Sessões administrativas e credenciais WebAuthn
+    match /admin_sessions/{sessionId} {
+      allow read, write: if true;
+    }
+
+    match /admin_webauthn_credentials/{credId} {
+      allow read, write: if true;
+    }
+
+    // Atletas do campeonato: público pode consultar estatísticas, gestores podem atualizar
+    match /atletas/{atletaId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Equipes do campeonato: público pode ver classificação, gestores podem atualizar
+    match /equipes/{equipeId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Partidas e placares: público pode ver tabela, gestores podem atualizar placares
+    match /partidas/{partidaId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Coleção de teste e metadados
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Brasileirao Projeto Cruzeirinho",
+  "description": "Aplicativo oficial do Brasileirao do Projeto Cruzeirinho - Bom de Bola, Bom na Escola. Gestao completa do campeonato, atletas, draft e inscricoes Pix.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

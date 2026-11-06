@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#1e3a8a" />
+    </linearGradient>
+  </defs>
+  <!-- Background Shield -->
+  <rect width="512" height="512" rx="120" fill="url(#blueGrad)" />
+  <!-- Shield Emblem -->
+  <path d="M256 70 L390 130 C390 280, 256 390, 256 440 C256 390, 122 280, 122 130 Z" fill="#ffffff" opacity="0.15" />
+  <path d="M256 95 L370 145 C370 270, 256 365, 256 410 C256 365, 142 270, 142 145 Z" fill="#ffffff" />
+  <path d="M256 115 L350 160 C350 255, 256 345, 256 385 C256 345, 162 255, 162 160 Z" fill="url(#blueGrad)" />
+  <!-- Soccer Ball & Star -->
+  <polygon points="256,150 268,185 305,185 275,207 286,242 256,220 226,242 237,207 207,185 244,185" fill="#facc15" />
+  <!-- Football stripes -->
+  <circle cx="256" cy="290" r="50" fill="#ffffff" />
+  <polygon points="256,260 285,280 274,312 238,312 227,280" fill="#1e3a8a" />
+</svg>

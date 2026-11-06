@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Brasileirão Projeto Cruzeirinho",
+  "short_name": "Cruzeirinho",
+  "description": "Brasileirão do Projeto Cruzeirinho - Bom de Bola, Bom na Escola. Tabela, classificação e inscrições.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e3a8a",
+  "icons": [
+    {
+      "src": "/assets/aistudio/1779882264991_35858112.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

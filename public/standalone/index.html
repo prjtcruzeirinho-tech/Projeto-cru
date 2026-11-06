@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Brasileirão do Projeto Cruzeirinho — Bom de Bola, Bom na Escola</title>
+  <meta name="description" content="Brasileirão do Projeto Cruzeirinho - Bom de Bola, Bom na Escola. O maior campeonato amador de base da região.">
+  <meta property="og:title" content="Brasileirão do Projeto Cruzeirinho — Bom de Bola, Bom na Escola">
+  <meta property="og:description" content="Tabela, classificação, estatísticas e inscrições oficiais para o Brasileirão Cruzeirinho 2026.">
+  <meta property="og:image" content="../assets/aistudio/1779882264991_35858112.png">
+  <link rel="icon" type="image/png" href="../assets/aistudio/1779882264991_35858112.png">
+  
+  <!-- Tailwind CSS & Fontes -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons & QR Code Generator -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-50 text-gray-900 font-['Inter'] antialiased selection:bg-blue-200">
+
+  <!-- BARRA DE NAVEGAÇÃO PÚBLICA -->
+  <nav class="bg-blue-900 text-white shadow-xl sticky top-0 z-40" id="mainNav">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center flex-wrap gap-2">
+      <div class="flex items-center space-x-2.5 font-black text-xl cursor-pointer hover:opacity-90 transition-opacity" onclick="navegarPara('home')">
+        <img src="../assets/aistudio/1779882264991_35858112.png" alt="Brasão Cruzeirinho" class="w-9 h-9 rounded-full object-contain p-0.5 bg-white shadow-xs border border-blue-400">
+        <div class="flex flex-col leading-tight">
+          <span class="text-base font-black tracking-tight text-white">Projeto Cruzeirinho</span>
+          <span class="text-[9px] font-bold text-blue-300 uppercase tracking-wider">Bom de Bola, Bom na Escola</span>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5 text-xs font-bold">
+        <button onclick="navegarPara('home')" class="nav-btn px-3 py-1.5 rounded-xl transition-colors cursor-pointer" data-route="home">Início</button>
+        <button onclick="abrirInscricao('SUB-9')" class="nav-btn px-3 py-1.5 rounded-xl transition-colors cursor-pointer" data-route="inscricao">Inscrições</button>
+        <button onclick="navegarPara('team_overview')" class="nav-btn px-3 py-1.5 rounded-xl transition-colors cursor-pointer flex items-center gap-1" data-route="team_overview">
+          <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i> Equipes (Overview)
+        </button>
+        <button onclick="navegarPara('tabela')" class="nav-btn px-3 py-1.5 rounded-xl transition-colors cursor-pointer" data-route="tabela">Tabela</button>
+        <button onclick="navegarPara('classificacao')" class="nav-btn px-3 py-1.5 rounded-xl transition-colors cursor-pointer" data-route="classificacao">Classificação</button>
+        <button onclick="navegarPara('estatisticas')" class="nav-btn px-3 py-1.5 rounded-xl transition-colors cursor-pointer" data-route="estatisticas">Estatísticas</button>
+        
+        <button onclick="compartilharWhatsAppGeral()" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 transition-colors cursor-pointer" title="Compartilhar no WhatsApp">
+          <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+        </button>
+        
+        <button onclick="navegarPara('admin_login')" class="px-3 py-1.5 rounded-xl font-black flex items-center hover:bg-blue-800 text-amber-300 ml-1 transition-colors cursor-pointer">
+          <i data-lucide="log-in" class="w-3.5 h-3.5 mr-1"></i> Admin
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- CONTAINER PRINCIPAL DINÂMICO -->
+  <main id="appContainer" class="min-h-[82vh]">
+    <!-- O conteúdo será injetado pelo script.js conforme a rota ativa -->
+  </main>
+
+  <!-- MODAL DE PAGAMENTO PIX (R$ 25,00) -->
+  <div id="pixModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs animate-fade-in">
+    <div class="bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-lg w-full border border-gray-100 text-left max-h-[92vh] overflow-y-auto">
+      <div class="flex justify-between items-center pb-4 border-b border-gray-100">
+        <div class="flex items-center gap-2.5">
+          <img src="../assets/aistudio/1779882264991_35858112.png" alt="Logo" class="w-10 h-10 rounded-full object-contain p-0.5 bg-white border border-blue-300 shadow-xs">
+          <div>
+            <span class="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
+              PagSeguro • Pix Valor Fixo R$ 25,00
+            </span>
+            <h3 class="text-xl font-black text-gray-900 mt-0.5">Pagamento da Taxa de Inscrição</h3>
+          </div>
+        </div>
+        <button onclick="fecharPixModal()" class="p-1 text-gray-400 hover:text-gray-600 rounded-lg cursor-pointer">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="mt-4 space-y-4 text-xs">
+        <div class="bg-blue-50/70 p-3 rounded-2xl border border-blue-200 text-blue-950 font-medium">
+          Pague a taxa de <strong>R$ 25,00</strong> para confirmar a vaga do atleta <strong id="pixAtletaNome"></strong> na categoria <strong id="pixAtletaCategoria"></strong>. O QR Code abaixo já vem com o valor e dados pré-configurados pelo PagSeguro!
+        </div>
+
+        <!-- QR Code Oficial PagSeguro -->
+        <div class="p-4 bg-gradient-to-b from-gray-50 to-emerald-50/40 rounded-2xl border-2 border-emerald-200 flex flex-col items-center justify-center text-center">
+          <span class="text-[11px] font-black uppercase text-emerald-900 mb-2 flex items-center gap-1.5">
+            <i data-lucide="qr-code" class="w-4 h-4"></i> Escaneie o QR Code no App do seu Banco
+          </span>
+
+          <div class="bg-white p-3.5 rounded-2xl shadow-md border-2 border-emerald-300 mb-3">
+            <canvas id="pixQrCanvas" class="w-[200px] h-[200px] mx-auto"></canvas>
+          </div>
+
+          <div class="flex items-center gap-2 font-black text-emerald-900 bg-white px-3 py-1.5 rounded-xl border border-emerald-200 shadow-xs mb-3">
+            <span>Valor Definido no QR Code:</span>
+            <span class="text-emerald-700 text-sm font-black">R$ 25,00</span>
+          </div>
+
+          <!-- Botão Copiar Pix Copia e Cola -->
+          <button id="btnCopiarPixCopiaCola" onclick="copiarPixCopiaECola()" class="w-full py-3.5 px-4 rounded-xl font-black text-xs flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition-all cursor-pointer">
+            <i data-lucide="copy" class="w-4 h-4"></i>
+            <span id="txtBtnCopiaCola">Copiar Código Pix Copia e Cola (R$ 25,00)</span>
+          </button>
+          <span class="text-[10px] text-gray-500 font-semibold mt-1.5">
+            No app do seu banco, escolha <strong>Pix Copia e Cola</strong> e cole o código. O valor de R$ 25,00 e o titular aparecem sozinhos!
+          </span>
+        </div>
+
+        <!-- Dados do Titular PagSeguro -->
+        <div class="bg-white border border-gray-200 rounded-2xl p-4 space-y-2.5 shadow-xs">
+          <div class="grid grid-cols-2 gap-2 pb-2 border-b border-gray-100">
+            <div>
+              <span class="text-[10px] uppercase font-bold text-gray-400 block">Beneficiário / Titular:</span>
+              <span class="font-black text-gray-900 text-xs">DOUGLAS LEONEL LEITE</span>
+            </div>
+            <div>
+              <span class="text-[10px] uppercase font-bold text-gray-400 block">Banco:</span>
+              <span class="font-black text-emerald-700 text-xs">PagSeguro / PagBank</span>
+            </div>
+            <div>
+              <span class="text-[10px] uppercase font-bold text-gray-400 block">Cidade / UF:</span>
+              <span class="font-bold text-gray-700 text-xs">Ibiúna - SP</span>
+            </div>
+            <div>
+              <span class="text-[10px] uppercase font-bold text-gray-400 block">Valor:</span>
+              <span class="font-black text-emerald-700 text-xs">R$ 25,00</span>
+            </div>
+          </div>
+
+          <div>
+            <label class="text-[10px] font-black uppercase text-gray-500 block mb-1">
+              Ou pague pela Chave Pix (E-mail):
+            </label>
+            <div class="flex items-center gap-2">
+              <input readOnly value="prjtcruzeirinho@gmail.com" class="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-bold text-gray-800 select-all outline-none">
+              <button onclick="copiarChaveEmail()" class="px-3 py-2.5 rounded-xl font-black text-xs flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-800 cursor-pointer">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copiar E-mail
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+            Código de Autenticação / Comprovante (Opcional):
+          </label>
+          <input type="text" id="comprovanteInput" placeholder="Ex: E20260315123456789... ou Últimos 4 dígitos da conta" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <label class="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-xs font-bold text-amber-950 cursor-pointer">
+          <input type="checkbox" id="pixCheckConfirmado" class="w-4 h-4 mt-0.5 accent-emerald-600 rounded cursor-pointer shrink-0">
+          <span>Declaro que já fiz a transferência Pix de <strong>R$ 25,00</strong> para <strong>Douglas Leonel Leite</strong> (PagSeguro).</span>
+        </label>
+
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="fecharPixModal()" class="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-50 cursor-pointer">
+            Voltar
+          </button>
+          <button type="button" onclick="confirmarPixEFinalizar()" class="flex-2 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+            <span>Já fiz o Pix! Confirmar Inscrição</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE SUCESSO / COMPROVANTE -->
+  <div id="successModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fade-in">
+    <div class="bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-md w-full border border-gray-100 text-center">
+      <div class="mb-4">
+        <img src="../assets/aistudio/1779882264991_35858112.png" alt="Brasão Cruzeirinho" class="w-20 h-20 rounded-full mx-auto object-contain p-1 bg-white shadow-md border-2 border-blue-400">
+      </div>
+      <div id="successModalContent">
+        <!-- Preenchido via script.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST DE NOTIFICAÇÃO -->
+  <div id="toast" class="hidden fixed bottom-5 right-5 bg-emerald-600 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center space-x-3 z-50 animate-bounce">
+    <i data-lucide="check-circle" id="toastIcon" class="w-5 h-5"></i>
+    <span id="toastMsg" class="font-semibold text-sm"></span>
+  </div>
+
+  <!-- RODAPÉ PÚBLICO -->
+  <footer id="mainFooter" class="bg-blue-950 text-blue-200 py-8 px-4 text-center text-xs border-t border-blue-900 mt-16">
+    <div class="max-w-4xl mx-auto space-y-3">
+      <div class="flex items-center justify-center gap-2 pt-1">
+        <img src="../assets/aistudio/1779882264991_35858112.png" alt="Brasão Projeto Cruzeirinho" class="w-7 h-7 rounded-full object-contain p-0.5 bg-white shadow-xs border border-blue-400">
+        <p class="font-black text-sm text-white">Projeto Cruzeirinho — Bom de Bola, Bom na Escola</p>
+      </div>
+      <p class="opacity-75">Campeonato de Futebol Amador de Base • Inclusão, Cidadania e Esporte</p>
+      <p class="text-[11px] text-blue-400 font-semibold pt-1">© 2026 Projeto Cruzeirinho • Piaí / Ibiúna - SP. Todos os direitos reservados.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

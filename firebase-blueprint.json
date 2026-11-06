@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "Inscricao": {
+      "title": "Inscricao",
+      "description": "Registro de inscricao de atleta no campeonato",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identificador unico da inscricao" },
+        "nome": { "type": "string", "description": "Nome completo do atleta" },
+        "nascimento": { "type": "string", "description": "Data de nascimento" },
+        "responsavel": { "type": "string", "description": "Nome do responsavel legal" },
+        "whatsapp": { "type": "string", "description": "Telefone WhatsApp para contato" },
+        "categoria": { "type": "string", "enum": ["SUB-9", "SUB-11", "SUB-16"], "description": "Categoria de idade" },
+        "tipo": { "type": "string", "enum": ["Normal", "Solidária"], "description": "Tipo de inscricao" },
+        "status": { "type": "string", "enum": ["Pendente", "Aprovada", "Recusada", "Aguardando Pagamento", "Aguardando Conferência", "Comprovante Rejeitado", "Pagamento Aprovado", "Inscrição Confirmada", "Inscrição Solidária em Análise", "Inscrição Solidária Aprovada", "Pagamento Recusado ou Cancelado"], "description": "Status da inscricao" },
+        "nota": { "type": "number", "description": "Nota tecnica de 1 a 5" },
+        "pagamentoPixConfirmado": { "type": "boolean", "description": "Se o pagamento Pix foi confirmado" },
+        "comprovantePix": { "type": "string", "description": "Descricao ou comprovante do Pix" },
+        "comprovanteArquivo": { "type": "string", "description": "Data URL base64 do comprovante enviado pelo participante" },
+        "comprovanteNomeArquivo": { "type": "string", "description": "Nome original do arquivo do comprovante" },
+        "comprovanteDataEnvio": { "type": "string", "description": "Timestamp ISO do envio do comprovante" },
+        "motivoRejeicao": { "type": "string", "description": "Motivo da rejeição do comprovante, se houver" },
+        "dataEnvio": { "type": "string", "description": "Timestamp ISO da inscricao" }
+      },
+      "required": ["id", "nome", "nascimento", "responsavel", "whatsapp", "categoria", "tipo", "status", "dataEnvio"]
+    },
+    "Atleta": {
+      "title": "Atleta",
+      "description": "Atleta participante do campeonato",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identificador unico do atleta" },
+        "nome": { "type": "string", "description": "Nome do atleta" },
+        "categoria": { "type": "string", "enum": ["SUB-9", "SUB-11", "SUB-16"], "description": "Categoria de idade" },
+        "responsavel": { "type": "string", "description": "Nome do responsavel" },
+        "tipo": { "type": "string", "description": "Tipo de inscricao" },
+        "equipeId": { "type": "string", "description": "ID da equipe ou null" },
+        "gols": { "type": "number", "description": "Total de gols no torneio" },
+        "assistencias": { "type": "number", "description": "Total de assistencias no torneio" },
+        "nota": { "type": "number", "description": "Nota tecnica do atleta de 1 a 5" }
+      },
+      "required": ["id", "nome", "categoria", "gols", "assistencias", "nota"]
+    },
+    "Equipe": {
+      "title": "Equipe",
+      "description": "Equipe participante de uma categoria do campeonato",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identificador unico da equipe" },
+        "nome": { "type": "string", "description": "Nome da equipe" },
+        "categoria": { "type": "string", "enum": ["SUB-9", "SUB-11", "SUB-16"], "description": "Categoria da equipe" },
+        "corPrincipal": { "type": "string", "description": "Cor hexadecimal do uniforme" }
+      },
+      "required": ["id", "nome", "categoria", "corPrincipal"]
+    },
+    "Partida": {
+      "title": "Partida",
+      "description": "Jogo do campeonato",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identificador unico da partida" },
+        "categoria": { "type": "string", "enum": ["SUB-9", "SUB-11", "SUB-16"], "description": "Categoria da partida" },
+        "data": { "type": "string", "description": "Data do jogo AAAA-MM-DD" },
+        "horario": { "type": "string", "description": "Horario HH:MM" },
+        "mandanteId": { "type": "string", "description": "ID da equipe mandante" },
+        "visitanteId": { "type": "string", "description": "ID da equipe visitante" },
+        "placarMandante": { "type": "number", "description": "Gols do mandante" },
+        "placarVisitante": { "type": "number", "description": "Gols do visitante" },
+        "status": { "type": "string", "enum": ["Agendado", "Finalizado"], "description": "Status do jogo" }
+      },
+      "required": ["id", "categoria", "data", "horario", "mandanteId", "visitanteId", "placarMandante", "placarVisitante", "status"]
+    }
+  },
+  "firestore": {
+    "/inscricoes/{inscricaoId}": {
+      "schema": { "$ref": "#/entities/Inscricao" },
+      "description": "Colecao de inscricoes submetidas pelo publico e geridas pelo administrador"
+    },
+    "/atletas/{atletaId}": {
+      "schema": { "$ref": "#/entities/Atleta" },
+      "description": "Colecao de atletas participantes e dados de draft"
+    },
+    "/equipes/{equipeId}": {
+      "schema": { "$ref": "#/entities/Equipe" },
+      "description": "Colecao de equipes de cada categoria"
+    },
+    "/partidas/{partidaId}": {
+      "schema": { "$ref": "#/entities/Partida" },
+      "description": "Colecao de partidas e placares do campeonato"
+    }
+  }
+}

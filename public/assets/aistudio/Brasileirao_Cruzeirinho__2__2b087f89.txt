@@ -1,0 +1,902 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { 
+  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot 
+} from 'firebase/firestore';
+import { 
+  Menu, X, Home, CalendarDays, ClipboardEdit, LogIn, Users, 
+  Shield, CheckCircle, XCircle, Settings, Trash2, Edit, Save, Plus,
+  Trophy, Goal, UsersRound, Shuffle, Activity, UserPlus
+} from 'lucide-react';
+
+// --- CONFIGURAÇÃO FIREBASE ---
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'cruzeirinho-app';
+
+// Caminhos padrão conforme regras estritas
+const getPublicCollection = (colName) => collection(db, 'artifacts', appId, 'public', 'data', colName);
+const getPublicDoc = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, docId);
+
+// --- COMPONENTE DE NOTIFICAÇÃO ---
+const Toast = ({ msg, type, onClose }) => {
+  if (!msg) return null;
+  const bg = type === 'error' ? 'bg-red-500' : 'bg-green-500';
+  return (
+    <div className={`fixed bottom-4 right-4 ${bg} text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-3 z-50 animate-bounce`}>
+      <span>{msg}</span>
+      <button onClick={onClose} className="hover:text-gray-200"><X size={18} /></button>
+    </div>
+  );
+};
+
+// --- SITE PÚBLICO: PÁGINAS ---
+
+const HomePublic = ({ setRoute }) => (
+  <div className="flex flex-col items-center justify-center p-6 space-y-10 animate-fade-in pb-16">
+    <div className="text-center space-y-4">
+      <div className="bg-blue-600 p-8 rounded-full shadow-2xl inline-block mb-2">
+        <Shield size={80} className="text-white" />
+      </div>
+      <h1 className="text-4xl md:text-5xl font-extrabold text-blue-900 tracking-tight">
+        Brasileirão do Projeto Cruzeirinho
+      </h1>
+      <p className="text-xl text-blue-700 max-w-2xl mx-auto font-medium">
+        Bom de Bola, Bom na Escola. O maior campeonato amador da região, focado na inclusão e no esporte.
+      </p>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
+      <div onClick={() => setRoute('inscricao_sub9')} className="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-400 cursor-pointer hover:shadow-xl transition-shadow text-center">
+        <UserPlus size={40} className="mx-auto text-blue-500 mb-3"/>
+        <h3 className="text-xl font-bold text-gray-800">Inscrição SUB-9</h3>
+        <p className="text-sm text-gray-500 mt-2">Atletas de 6 a 9 anos.</p>
+      </div>
+      <div onClick={() => setRoute('inscricao_sub11')} className="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-600 cursor-pointer hover:shadow-xl transition-shadow text-center">
+        <UserPlus size={40} className="mx-auto text-blue-700 mb-3"/>
+        <h3 className="text-xl font-bold text-gray-800">Inscrição SUB-11</h3>
+        <p className="text-sm text-gray-500 mt-2">Atletas de 10 a 11 anos.</p>
+      </div>
+      <div onClick={() => setRoute('inscricao_sub16')} className="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-800 cursor-pointer hover:shadow-xl transition-shadow text-center">
+        <UserPlus size={40} className="mx-auto text-blue-900 mb-3"/>
+        <h3 className="text-xl font-bold text-gray-800">Inscrição SUB-16</h3>
+        <p className="text-sm text-gray-500 mt-2">Atletas de 13 a 16 anos.</p>
+      </div>
+    </div>
+  </div>
+);
+
+const FormularioInscricao = ({ user, showToast, categoriaPreSelecionada }) => {
+  const [formData, setFormData] = useState({
+    nome: '', nascimento: '', responsavel: '', whatsapp: '', categoria: categoriaPreSelecionada, tipo: 'Normal'
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => { setFormData(prev => ({...prev, categoria: categoriaPreSelecionada})); }, [categoriaPreSelecionada]);
+
+  const handleDateMask = (e) => {
+    let v = e.target.value.replace(/\D/g, '');
+    if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2);
+    if (v.length > 5) v = v.slice(0, 5) + '/' + v.slice(5);
+    setFormData({ ...formData, nascimento: v.slice(0, 10) });
+  };
+
+  const handlePhoneMask = (e) => {
+    let v = e.target.value.replace(/\D/g, '');
+    if (v.length > 2) v = '(' + v.slice(0, 2) + ') ' + v.slice(2);
+    if (v.length > 9) v = v.slice(0, 10) + '-' + v.slice(10);
+    setFormData({ ...formData, whatsapp: v.slice(0, 15) });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!user) return showToast('Erro de conexão. Aguarde.', 'error');
+    if (formData.nascimento.length !== 10 || formData.whatsapp.length < 14) return showToast('Preencha os dados corretamente.', 'error');
+    setLoading(true);
+    try {
+      await addDoc(getPublicCollection('inscricoes'), { ...formData, status: 'Pendente', dataEnvio: new Date().toISOString() });
+      showToast('Inscrição enviada com sucesso!');
+      setFormData({ nome: '', nascimento: '', responsavel: '', whatsapp: '', categoria: categoriaPreSelecionada, tipo: 'Normal' });
+    } catch (err) {
+      showToast('Erro ao salvar inscrição.', 'error');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="max-w-xl mx-auto bg-white p-8 rounded-2xl shadow-xl border border-gray-100 mt-6">
+      <h2 className="text-3xl font-bold text-blue-900 mb-6 text-center">Inscrição {categoriaPreSelecionada}</h2>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">Nome Completo do Atleta</label>
+          <input required type="text" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: Enzo Gabriel" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">Data de Nascimento</label>
+          <input required type="text" value={formData.nascimento} onChange={handleDateMask} placeholder="DD/MM/AAAA" className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">Nome do Responsável</label>
+          <input required type="text" value={formData.responsavel} onChange={e => setFormData({...formData, responsavel: e.target.value})} className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">WhatsApp</label>
+          <input required type="text" value={formData.whatsapp} onChange={handlePhoneMask} placeholder="(15) 99999-9999" className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none" />
+        </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">Tipo de Inscrição</label>
+          <select value={formData.tipo} onChange={e => setFormData({...formData, tipo: e.target.value})} className="w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none">
+            <option value="Normal">Normal (R$ 25)</option>
+            <option value="Solidária">Solidária (Isento - Sujeito a Análise)</option>
+          </select>
+        </div>
+        <button disabled={loading} type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-lg shadow-md transition-colors disabled:opacity-50">
+          {loading ? 'Enviando...' : 'Confirmar Inscrição'}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+const ClassificacaoPublic = ({ partidas, equipes }) => {
+  const [categoria, setCategoria] = useState('SUB-9');
+
+  const tabela = useMemo(() => {
+    let tab = {};
+    equipes.filter(e => e.categoria === categoria).forEach(eq => {
+      tab[eq.id] = { id: eq.id, nome: eq.nome, cor: eq.corPrincipal, pts: 0, j: 0, v: 0, e: 0, d: 0, gp: 0, gc: 0, sg: 0 };
+    });
+
+    partidas.filter(p => p.categoria === categoria && p.status === 'Finalizado').forEach(p => {
+      const pm = parseInt(p.placarMandante) || 0;
+      const pv = parseInt(p.placarVisitante) || 0;
+      
+      if(tab[p.mandanteId]) {
+        tab[p.mandanteId].j += 1;
+        tab[p.mandanteId].gp += pm;
+        tab[p.mandanteId].gc += pv;
+        tab[p.mandanteId].sg += (pm - pv);
+        if(pm > pv) { tab[p.mandanteId].v += 1; tab[p.mandanteId].pts += 3; }
+        else if (pm === pv) { tab[p.mandanteId].e += 1; tab[p.mandanteId].pts += 1; }
+        else { tab[p.mandanteId].d += 1; }
+      }
+
+      if(tab[p.visitanteId]) {
+        tab[p.visitanteId].j += 1;
+        tab[p.visitanteId].gp += pv;
+        tab[p.visitanteId].gc += pm;
+        tab[p.visitanteId].sg += (pv - pm);
+        if(pv > pm) { tab[p.visitanteId].v += 1; tab[p.visitanteId].pts += 3; }
+        else if (pv === pm) { tab[p.visitanteId].e += 1; tab[p.visitanteId].pts += 1; }
+        else { tab[p.visitanteId].d += 1; }
+      }
+    });
+
+    return Object.values(tab).sort((a, b) => b.pts - a.pts || b.v - a.v || b.sg - a.sg || b.gp - a.gp);
+  }, [partidas, equipes, categoria]);
+
+  return (
+    <div className="max-w-5xl mx-auto mt-6 p-4">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold text-blue-900 flex items-center"><Trophy className="mr-2"/> Classificação</h2>
+        <select value={categoria} onChange={e=>setCategoria(e.target.value)} className="p-2 border rounded shadow-sm text-lg font-bold text-blue-800">
+          <option value="SUB-9">SUB-9</option><option value="SUB-11">SUB-11</option><option value="SUB-16">SUB-16</option>
+        </select>
+      </div>
+      <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
+        <table className="w-full text-left min-w-[600px]">
+          <thead className="bg-blue-900 text-white">
+            <tr>
+              <th className="p-4 rounded-tl-xl text-center w-12">#</th>
+              <th className="p-4">Equipe</th>
+              <th className="p-4 text-center">PTS</th>
+              <th className="p-4 text-center">J</th>
+              <th className="p-4 text-center">V</th>
+              <th className="p-4 text-center">E</th>
+              <th className="p-4 text-center">D</th>
+              <th className="p-4 text-center">GP</th>
+              <th className="p-4 text-center">GC</th>
+              <th className="p-4 text-center rounded-tr-xl">SG</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tabela.map((t, idx) => (
+              <tr key={t.id} className="border-b hover:bg-gray-50">
+                <td className="p-4 text-center font-bold">{idx + 1}º</td>
+                <td className="p-4 font-bold flex items-center">
+                  <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: t.cor}}></div>
+                  {t.nome}
+                </td>
+                <td className="p-4 text-center font-black text-blue-700">{t.pts}</td>
+                <td className="p-4 text-center">{t.j}</td>
+                <td className="p-4 text-center">{t.v}</td>
+                <td className="p-4 text-center">{t.e}</td>
+                <td className="p-4 text-center">{t.d}</td>
+                <td className="p-4 text-center">{t.gp}</td>
+                <td className="p-4 text-center">{t.gc}</td>
+                <td className="p-4 text-center font-semibold">{t.sg}</td>
+              </tr>
+            ))}
+            {tabela.length === 0 && <tr><td colSpan="10" className="p-6 text-center text-gray-500">Nenhuma equipe nesta categoria.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const TabelaPublic = ({ partidas, equipes }) => {
+  const getEquipe = (id) => equipes.find(e => e.id === id) || { nome: 'Desconhecido', corPrincipal: '#ccc' };
+  
+  return (
+    <div className="max-w-4xl mx-auto mt-6 p-4">
+      <h2 className="text-3xl font-bold text-blue-900 flex items-center mb-6"><CalendarDays className="mr-2"/> Tabela de Jogos</h2>
+      <div className="space-y-4">
+        {partidas.length === 0 && <p className="text-center text-gray-500 p-6 bg-white rounded-xl shadow">Nenhum jogo cadastrado.</p>}
+        {partidas.map(p => {
+          const mandante = getEquipe(p.mandanteId);
+          const visitante = getEquipe(p.visitanteId);
+          return (
+            <div key={p.id} className="bg-white rounded-xl shadow p-4 flex flex-col md:flex-row justify-between items-center border-l-4 border-blue-500">
+              <div className="text-sm font-bold text-gray-500 mb-2 md:mb-0 w-32 text-center md:text-left">
+                {p.data} <br/> {p.horario} <br/> <span className="text-xs bg-blue-100 text-blue-800 px-2 rounded-full">{p.categoria}</span>
+              </div>
+              <div className="flex-1 flex items-center justify-center space-x-4">
+                <span className="font-bold text-lg text-right w-1/3" style={{color: mandante.corPrincipal}}>{mandante.nome}</span>
+                <div className="bg-gray-100 px-4 py-2 rounded-lg font-black text-2xl tracking-widest text-gray-800 min-w-[80px] text-center">
+                  {p.status === 'Finalizado' ? `${p.placarMandante} - ${p.placarVisitante}` : 'VS'}
+                </div>
+                <span className="font-bold text-lg text-left w-1/3" style={{color: visitante.corPrincipal}}>{visitante.nome}</span>
+              </div>
+              <div className="w-24 text-center mt-2 md:mt-0">
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${p.status==='Finalizado'?'bg-green-100 text-green-700':'bg-yellow-100 text-yellow-700'}`}>
+                  {p.status}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const EstatisticasPublic = ({ atletas, equipes }) => {
+  const [cat, setCat] = useState('SUB-9');
+  
+  const getEquipe = (id) => equipes.find(e => e.id === id) || { nome: 'Sem Time' };
+  
+  const artilharia = [...atletas]
+    .filter(a => a.categoria === cat && (a.gols || 0) > 0)
+    .sort((a,b) => (b.gols || 0) - (a.gols || 0));
+
+  const assistencias = [...atletas]
+    .filter(a => a.categoria === cat && (a.assistencias || 0) > 0)
+    .sort((a,b) => (b.assistencias || 0) - (a.assistencias || 0));
+
+  return (
+    <div className="max-w-5xl mx-auto mt-6 p-4">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold text-blue-900 flex items-center"><Activity className="mr-2"/> Ranking</h2>
+        <select value={cat} onChange={e=>setCat(e.target.value)} className="p-2 border rounded shadow-sm text-lg font-bold text-blue-800">
+          <option value="SUB-9">SUB-9</option><option value="SUB-11">SUB-11</option><option value="SUB-16">SUB-16</option>
+        </select>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl shadow p-4">
+          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center"><Goal className="mr-2 text-green-600"/> Artilharia</h3>
+          <ul className="space-y-2">
+            {artilharia.map((a, i) => (
+              <li key={a.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <span className="font-bold text-gray-700 mr-2">{i+1}º</span>
+                  <span className="font-semibold">{a.nome}</span>
+                  <span className="text-xs text-gray-500 ml-2">({getEquipe(a.equipeId).nome})</span>
+                </div>
+                <span className="font-black text-xl text-green-700">{a.gols}</span>
+              </li>
+            ))}
+            {artilharia.length===0 && <li className="text-gray-500 text-center">Nenhum gol registrado.</li>}
+          </ul>
+        </div>
+
+        <div className="bg-white rounded-xl shadow p-4">
+          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center"><UsersRound className="mr-2 text-blue-600"/> Assistências</h3>
+          <ul className="space-y-2">
+            {assistencias.map((a, i) => (
+              <li key={a.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <span className="font-bold text-gray-700 mr-2">{i+1}º</span>
+                  <span className="font-semibold">{a.nome}</span>
+                  <span className="text-xs text-gray-500 ml-2">({getEquipe(a.equipeId).nome})</span>
+                </div>
+                <span className="font-black text-xl text-blue-700">{a.assistencias}</span>
+              </li>
+            ))}
+            {assistencias.length===0 && <li className="text-gray-500 text-center">Nenhuma assistência registrada.</li>}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// --- PAINEL ADMINISTRATIVO ---
+
+const AdminInscricoes = ({ inscricoes, showToast }) => {
+  const handleStatus = async (id, status, dados) => {
+    try {
+      await updateDoc(getPublicDoc('inscricoes', id), { status });
+      if (status === 'Aprovada') {
+        // Criar atleta
+        await addDoc(getPublicCollection('atletas'), {
+          nome: dados.nome, categoria: dados.categoria, responsavel: dados.responsavel, 
+          tipo: dados.tipo, equipeId: null, gols: 0, assistencias: 0
+        });
+      }
+      showToast(`Inscrição ${status.toLowerCase()}!`);
+    } catch (e) { showToast('Erro', 'error'); }
+  };
+
+  const handleExcluir = async (id) => {
+    if(!window.confirm("Excluir inscrição permanentemente?")) return;
+    try {
+      await deleteDoc(getPublicDoc('inscricoes', id));
+      showToast('Registro excluído!');
+    } catch (e) { showToast('Erro', 'error'); }
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow p-6 overflow-x-auto">
+      <h2 className="text-2xl font-bold text-gray-800 mb-4">Gerenciar Inscrições</h2>
+      <table className="w-full text-left border-collapse min-w-[700px]">
+        <thead>
+          <tr className="bg-gray-100 text-gray-700 uppercase text-sm">
+            <th className="p-3">Atleta</th>
+            <th className="p-3">Categoria</th>
+            <th className="p-3">Tipo</th>
+            <th className="p-3">Status</th>
+            <th className="p-3">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {inscricoes.map(i => (
+            <tr key={i.id} className="border-b hover:bg-gray-50">
+              <td className="p-3 font-semibold">{i.nome}<br/><span className="text-xs font-normal text-gray-500">{i.nascimento} | {i.responsavel}</span></td>
+              <td className="p-3">{i.categoria}</td>
+              <td className="p-3"><span className={`text-xs px-2 py-1 rounded ${i.tipo==='Solidária'?'bg-blue-100 text-blue-800':'bg-gray-100'}`}>{i.tipo}</span></td>
+              <td className="p-3">
+                <span className={`px-2 py-1 rounded-full text-xs font-bold ${i.status === 'Aprovada' ? 'bg-green-100 text-green-700' : i.status === 'Recusada' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                  {i.status}
+                </span>
+              </td>
+              <td className="p-3 flex space-x-2">
+                {i.status === 'Pendente' && (
+                  <>
+                    <button onClick={() => handleStatus(i.id, 'Aprovada', i)} className="p-2 bg-green-500 text-white rounded hover:bg-green-600"><CheckCircle size={16}/></button>
+                    <button onClick={() => handleStatus(i.id, 'Recusada', i)} className="p-2 bg-red-500 text-white rounded hover:bg-red-600"><XCircle size={16}/></button>
+                  </>
+                )}
+                <button onClick={() => handleExcluir(i.id)} className="p-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"><Trash2 size={16}/></button>
+              </td>
+            </tr>
+          ))}
+          {inscricoes.length===0 && <tr><td colSpan="5" className="p-4 text-center">Vazio.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const AdminSorteio = ({ atletas, equipes, showToast }) => {
+  const [categoria, setCategoria] = useState('SUB-9');
+  const [sorteando, setSorteando] = useState(false);
+
+  const atletasLivres = atletas.filter(a => a.categoria === categoria && !a.equipeId);
+  const equipesCat = equipes.filter(e => e.categoria === categoria);
+
+  const realizarSorteio = async () => {
+    if (equipesCat.length === 0) return showToast('Cadastre equipes nesta categoria primeiro!', 'error');
+    if (atletasLivres.length === 0) return showToast('Nenhum atleta aprovado sem equipe nesta categoria.', 'error');
+    if (!window.confirm(`Sortear ${atletasLivres.length} atletas para ${equipesCat.length} equipes?`)) return;
+
+    setSorteando(true);
+    try {
+      // Fisher-Yates Shuffle
+      let embaralhados = [...atletasLivres];
+      for (let i = embaralhados.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [embaralhados[i], embaralhados[j]] = [embaralhados[j], embaralhados[i]];
+      }
+
+      // Distribuição round-robin
+      let equipeIdx = 0;
+      for (const atleta of embaralhados) {
+        const eqId = equipesCat[equipeIdx].id;
+        await updateDoc(getPublicDoc('atletas', atleta.id), { equipeId: eqId });
+        equipeIdx = (equipeIdx + 1) % equipesCat.length;
+      }
+      showToast('Sorteio realizado e salvo com sucesso!');
+    } catch (e) {
+      showToast('Erro ao realizar sorteio.', 'error');
+    }
+    setSorteando(false);
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow p-6">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center"><Shuffle className="mr-2"/> Sorteio de Atletas</h2>
+      
+      <div className="flex flex-col md:flex-row gap-4 items-center mb-8 p-4 bg-gray-50 rounded-lg">
+        <label className="font-bold text-gray-700">Categoria:</label>
+        <select value={categoria} onChange={e=>setCategoria(e.target.value)} className="p-2 border rounded font-bold text-blue-800">
+          <option value="SUB-9">SUB-9</option><option value="SUB-11">SUB-11</option><option value="SUB-16">SUB-16</option>
+        </select>
+        <div className="flex-1 text-center md:text-right">
+          <span className="text-sm bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full mr-2 font-semibold">Atletas Livres: {atletasLivres.length}</span>
+          <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-semibold">Equipes: {equipesCat.length}</span>
+        </div>
+        <button disabled={sorteando || atletasLivres.length===0 || equipesCat.length===0} onClick={realizarSorteio} className="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center">
+          <Shuffle size={18} className="mr-2"/> {sorteando ? 'Sorteando...' : 'Sortear Agora'}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {equipesCat.map(eq => {
+          const elenco = atletas.filter(a => a.equipeId === eq.id);
+          return (
+            <div key={eq.id} className="border rounded-lg overflow-hidden shadow-sm">
+              <div className="p-3 text-white font-bold flex justify-between" style={{backgroundColor: eq.corPrincipal}}>
+                <span>{eq.nome}</span> <span>{elenco.length}</span>
+              </div>
+              <ul className="p-3 text-sm space-y-1 bg-white min-h-[100px]">
+                {elenco.map(a => (
+                  <li key={a.id} className="flex justify-between items-center border-b pb-1">
+                    <span>{a.nome}</span>
+                    <button onClick={()=>updateDoc(getPublicDoc('atletas', a.id), {equipeId: null})} className="text-red-500 hover:text-red-700" title="Remover da equipe"><X size={14}/></button>
+                  </li>
+                ))}
+                {elenco.length===0 && <li className="text-gray-400 italic">Nenhum atleta</li>}
+              </ul>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  );
+};
+
+const AdminPartidas = ({ partidas, equipes, showToast }) => {
+  const [novoJogo, setNovoJogo] = useState({ categoria: 'SUB-9', data: '', horario: '', mandanteId: '', visitanteId: '' });
+
+  const equipesCat = equipes.filter(e => e.categoria === novoJogo.categoria);
+
+  const handleCriar = async (e) => {
+    e.preventDefault();
+    if(novoJogo.mandanteId === novoJogo.visitanteId) return showToast('Escolha equipes diferentes', 'error');
+    if(!novoJogo.mandanteId || !novoJogo.visitanteId) return showToast('Selecione os dois times', 'error');
+    
+    try {
+      await addDoc(getPublicCollection('partidas'), { ...novoJogo, status: 'Agendado', placarMandante: 0, placarVisitante: 0 });
+      showToast('Partida criada!');
+      setNovoJogo({...novoJogo, data: '', horario: '', mandanteId: '', visitanteId: ''});
+    } catch(err) { showToast('Erro', 'error'); }
+  };
+
+  const handleFinalizar = async (id, pm, pv) => {
+    try {
+      await updateDoc(getPublicDoc('partidas', id), { status: 'Finalizado', placarMandante: pm, placarVisitante: pv });
+      showToast('Partida finalizada. Classificação atualizada!');
+    } catch(err) { showToast('Erro', 'error'); }
+  };
+
+  const handleExcluir = async (id) => {
+    if(!window.confirm("Excluir partida?")) return;
+    try { await deleteDoc(getPublicDoc('partidas', id)); showToast('Excluída!'); } catch(err) { showToast('Erro', 'error'); }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl shadow p-6">
+        <h2 className="text-xl font-bold mb-4 flex items-center"><Plus className="mr-2"/> Agendar Partida</h2>
+        <form onSubmit={handleCriar} className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+          <div>
+            <label className="block text-sm font-semibold mb-1">Categoria</label>
+            <select value={novoJogo.categoria} onChange={e => setNovoJogo({...novoJogo, categoria: e.target.value, mandanteId:'', visitanteId:''})} className="w-full p-2 border rounded outline-none">
+              <option value="SUB-9">SUB-9</option><option value="SUB-11">SUB-11</option><option value="SUB-16">SUB-16</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1">Data</label>
+            <input required type="date" value={novoJogo.data} onChange={e=>setNovoJogo({...novoJogo, data: e.target.value})} className="w-full p-2 border rounded"/>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1">Hora</label>
+            <input required type="time" value={novoJogo.horario} onChange={e=>setNovoJogo({...novoJogo, horario: e.target.value})} className="w-full p-2 border rounded"/>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1">Mandante</label>
+            <select required value={novoJogo.mandanteId} onChange={e=>setNovoJogo({...novoJogo, mandanteId: e.target.value})} className="w-full p-2 border rounded">
+              <option value="">Selecione</option>
+              {equipesCat.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1">Visitante</label>
+            <select required value={novoJogo.visitanteId} onChange={e=>setNovoJogo({...novoJogo, visitanteId: e.target.value})} className="w-full p-2 border rounded">
+              <option value="">Selecione</option>
+              {equipesCat.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+            </select>
+          </div>
+          <button type="submit" className="bg-blue-600 text-white font-bold p-2 rounded hover:bg-blue-700">Salvar</button>
+        </form>
+      </div>
+
+      <div className="bg-white rounded-xl shadow p-6 overflow-x-auto">
+        <h2 className="text-xl font-bold mb-4">Gerenciar Resultados</h2>
+        <table className="w-full text-left min-w-[700px]">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="p-2">Data/Hora</th>
+              <th className="p-2">Cat</th>
+              <th className="p-2 text-right">Mandante</th>
+              <th className="p-2 text-center">Placar</th>
+              <th className="p-2 text-left">Visitante</th>
+              <th className="p-2">Status</th>
+              <th className="p-2">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {partidas.map(p => {
+              const m = equipes.find(e=>e.id===p.mandanteId);
+              const v = equipes.find(e=>e.id===p.visitanteId);
+              return (
+                <tr key={p.id} className="border-b">
+                  <td className="p-2 text-sm">{p.data} {p.horario}</td>
+                  <td className="p-2 text-sm">{p.categoria}</td>
+                  <td className="p-2 text-right font-bold" style={{color: m?.corPrincipal}}>{m?.nome}</td>
+                  <td className="p-2 text-center flex justify-center items-center space-x-2">
+                    <input id={`pm_${p.id}`} type="number" defaultValue={p.placarMandante} className="w-12 text-center border rounded p-1" min="0"/>
+                    <span>X</span>
+                    <input id={`pv_${p.id}`} type="number" defaultValue={p.placarVisitante} className="w-12 text-center border rounded p-1" min="0"/>
+                  </td>
+                  <td className="p-2 text-left font-bold" style={{color: v?.corPrincipal}}>{v?.nome}</td>
+                  <td className="p-2 text-xs">{p.status}</td>
+                  <td className="p-2 space-x-2 flex">
+                    <button onClick={() => {
+                       const pm = parseInt(document.getElementById(`pm_${p.id}`).value);
+                       const pv = parseInt(document.getElementById(`pv_${p.id}`).value);
+                       handleFinalizar(p.id, pm, pv);
+                    }} className="p-1 bg-green-500 text-white rounded hover:bg-green-600 text-xs font-bold" title="Finalizar e Salvar">Salvar</button>
+                    <button onClick={()=>handleExcluir(p.id)} className="p-1 bg-red-500 text-white rounded hover:bg-red-600"><Trash2 size={14}/></button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const AdminEstatisticas = ({ atletas, equipes, showToast }) => {
+  const [busca, setBusca] = useState('');
+
+  const updateStats = async (id, campo, delta) => {
+    const atleta = atletas.find(a => a.id === id);
+    let newVal = (atleta[campo] || 0) + delta;
+    if (newVal < 0) newVal = 0;
+    try {
+      await updateDoc(getPublicDoc('atletas', id), { [campo]: newVal });
+      showToast('Estatística atualizada!');
+    } catch(err) { showToast('Erro', 'error'); }
+  };
+
+  const filtrados = atletas.filter(a => a.nome.toLowerCase().includes(busca.toLowerCase()) && a.equipeId);
+
+  return (
+    <div className="bg-white rounded-xl shadow p-6">
+      <h2 className="text-2xl font-bold text-gray-800 mb-4">Lançar Gols e Assistências</h2>
+      <input type="text" placeholder="Buscar atleta por nome..." value={busca} onChange={e=>setBusca(e.target.value)} className="w-full p-3 border rounded-lg mb-6"/>
+      
+      <div className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="p-3">Atleta</th>
+              <th className="p-3">Equipe</th>
+              <th className="p-3 text-center">Gols</th>
+              <th className="p-3 text-center">Assistências</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtrados.slice(0, 10).map(a => {
+              const eq = equipes.find(e=>e.id===a.equipeId);
+              return (
+                <tr key={a.id} className="border-b">
+                  <td className="p-3 font-bold">{a.nome} <span className="text-xs text-gray-400">({a.categoria})</span></td>
+                  <td className="p-3" style={{color: eq?.corPrincipal}}>{eq?.nome}</td>
+                  <td className="p-3 text-center">
+                    <button onClick={()=>updateStats(a.id, 'gols', -1)} className="px-2 bg-gray-200 rounded">-</button>
+                    <span className="mx-3 font-bold text-lg">{a.gols || 0}</span>
+                    <button onClick={()=>updateStats(a.id, 'gols', 1)} className="px-2 bg-green-500 text-white rounded">+</button>
+                  </td>
+                  <td className="p-3 text-center">
+                    <button onClick={()=>updateStats(a.id, 'assistencias', -1)} className="px-2 bg-gray-200 rounded">-</button>
+                    <span className="mx-3 font-bold text-lg">{a.assistencias || 0}</span>
+                    <button onClick={()=>updateStats(a.id, 'assistencias', 1)} className="px-2 bg-blue-500 text-white rounded">+</button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const AdminEquipes = ({ equipes, showToast }) => {
+  const [novaEquipe, setNovaEquipe] = useState({ nome: '', categoria: 'SUB-9', corPrincipal: '#1E3A8A' });
+
+  const handleSalvar = async (e) => {
+    e.preventDefault();
+    try {
+      await addDoc(getPublicCollection('equipes'), novaEquipe);
+      showToast('Equipe criada!');
+      setNovaEquipe({ nome: '', categoria: 'SUB-9', corPrincipal: '#1E3A8A' });
+    } catch (err) { showToast('Erro', 'error'); }
+  };
+
+  const handleExcluir = async (id) => {
+    try { await deleteDoc(getPublicDoc('equipes', id)); showToast('Equipe removida!'); } catch (e) { showToast('Erro', 'error'); }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl shadow p-6">
+        <h2 className="text-xl font-bold mb-4 flex items-center"><Plus className="mr-2"/> Adicionar Equipe</h2>
+        <form onSubmit={handleSalvar} className="flex flex-col md:flex-row gap-4 items-end">
+          <div className="flex-1">
+            <label className="block text-sm font-semibold mb-1">Nome do Time</label>
+            <input required type="text" value={novaEquipe.nome} onChange={e => setNovaEquipe({...novaEquipe, nome: e.target.value})} className="w-full p-2 border rounded" placeholder="Ex: Flamengo" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1">Categoria</label>
+            <select value={novaEquipe.categoria} onChange={e => setNovaEquipe({...novaEquipe, categoria: e.target.value})} className="w-full p-2 border rounded">
+              <option value="SUB-9">SUB-9</option><option value="SUB-11">SUB-11</option><option value="SUB-16">SUB-16</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold mb-1">Cor</label>
+            <input type="color" value={novaEquipe.corPrincipal} onChange={e => setNovaEquipe({...novaEquipe, corPrincipal: e.target.value})} className="w-14 h-10 p-1 border rounded cursor-pointer" />
+          </div>
+          <button type="submit" className="bg-blue-600 text-white font-bold py-2 px-6 rounded">Salvar</button>
+        </form>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {equipes.map(eq => (
+          <div key={eq.id} className="bg-white rounded-xl shadow p-4 flex justify-between border-l-8" style={{borderColor: eq.corPrincipal}}>
+            <div>
+              <h3 className="font-bold text-lg text-gray-800">{eq.nome}</h3>
+              <p className="text-sm text-gray-500">{eq.categoria}</p>
+            </div>
+            <button onClick={() => handleExcluir(eq.id)} className="text-red-500 p-2 rounded"><Trash2 size={20}/></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// --- APP PRINCIPAL ---
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [route, setRoute] = useState('home');
+  const [isAdmin, setIsAdmin] = useState(false);
+  
+  // Login State
+  const [adminUser, setAdminUser] = useState('');
+  const [adminPass, setAdminPass] = useState('');
+  
+  // Dados Firebase
+  const [inscricoes, setInscricoes] = useState([]);
+  const [atletas, setAtletas] = useState([]);
+  const [equipes, setEquipes] = useState([]);
+  const [partidas, setPartidas] = useState([]);
+  const [toast, setToast] = useState({ show: false, msg: '', type: '' });
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ show: true, msg, type });
+    setTimeout(() => setToast({ show: false, msg: '', type: '' }), 4000);
+  };
+
+  // Inicialização Auth (Regra 3)
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) { console.error("Auth falhou", err); }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  // Busca de Dados (Regras 1 e 2)
+  useEffect(() => {
+    if (!user) return;
+    const unsubInsc = onSnapshot(getPublicCollection('inscricoes'), (snap) => setInscricoes(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubAtl = onSnapshot(getPublicCollection('atletas'), (snap) => setAtletas(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubEq = onSnapshot(getPublicCollection('equipes'), (snap) => setEquipes(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubPart = onSnapshot(getPublicCollection('partidas'), (snap) => setPartidas(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return () => { unsubInsc(); unsubAtl(); unsubEq(); unsubPart(); };
+  }, [user]);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (adminUser === 'admin' && adminPass === 'Cruzeiro@2026') {
+      setIsAdmin(true);
+      setRoute('admin_dashboard');
+      showToast('Acesso Autorizado!');
+    } else {
+      showToast('Credenciais Inválidas!', 'error');
+    }
+  };
+
+  // --- RENDERS DE LAYOUT ---
+  const renderPublicNav = () => (
+    <nav className="bg-blue-900 text-white shadow-lg sticky top-0 z-40">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center flex-wrap">
+        <div className="flex items-center space-x-2 font-bold text-xl cursor-pointer mb-2 md:mb-0" onClick={() => setRoute('home')}>
+          <Shield className="text-blue-300" /> <span>Cruzeirinho</span>
+        </div>
+        <div className="flex flex-wrap space-x-1 justify-center">
+          <button onClick={() => setRoute('home')} className={`px-2 py-1 rounded text-sm transition-colors ${route==='home'?'bg-blue-700':'hover:bg-blue-700'}`}>Início</button>
+          
+          <div className="relative group">
+            <button className="px-2 py-1 rounded text-sm hover:bg-blue-700 flex items-center">Inscrições</button>
+            <div className="absolute hidden group-hover:block bg-white text-blue-900 shadow-xl rounded mt-1 overflow-hidden z-50">
+              <div onClick={()=>setRoute('inscricao_sub9')} className="px-4 py-2 hover:bg-blue-50 cursor-pointer whitespace-nowrap border-b text-sm">SUB-9</div>
+              <div onClick={()=>setRoute('inscricao_sub11')} className="px-4 py-2 hover:bg-blue-50 cursor-pointer whitespace-nowrap border-b text-sm">SUB-11</div>
+              <div onClick={()=>setRoute('inscricao_sub16')} className="px-4 py-2 hover:bg-blue-50 cursor-pointer whitespace-nowrap text-sm">SUB-16</div>
+            </div>
+          </div>
+          
+          <button onClick={() => setRoute('tabela')} className={`px-2 py-1 rounded text-sm transition-colors ${route==='tabela'?'bg-blue-700':'hover:bg-blue-700'}`}>Tabela</button>
+          <button onClick={() => setRoute('classificacao')} className={`px-2 py-1 rounded text-sm transition-colors ${route==='classificacao'?'bg-blue-700':'hover:bg-blue-700'}`}>Classificação</button>
+          <button onClick={() => setRoute('estatisticas')} className={`px-2 py-1 rounded text-sm transition-colors ${route==='estatisticas'?'bg-blue-700':'hover:bg-blue-700'}`}>Estatísticas</button>
+          <button onClick={() => setRoute('admin_login')} className="px-2 py-1 rounded text-sm flex items-center hover:bg-blue-700 text-yellow-300"><LogIn size={16} className="mr-1"/> Admin</button>
+        </div>
+      </div>
+    </nav>
+  );
+
+  const renderAdminLayout = () => {
+    const menus = [
+      { id: 'admin_dashboard', label: 'Visão Geral', icon: <Home size={18} /> },
+      { id: 'admin_inscricoes', label: 'Inscrições', icon: <ClipboardEdit size={18} /> },
+      { id: 'admin_sorteio', label: 'Sorteio', icon: <Shuffle size={18} /> },
+      { id: 'admin_equipes', label: 'Equipes', icon: <Users size={18} /> },
+      { id: 'admin_partidas', label: 'Jogos e Placar', icon: <CalendarDays size={18} /> },
+      { id: 'admin_stats', label: 'Artilharia/Assists', icon: <Goal size={18} /> },
+      { id: 'home', label: 'Sair do Painel', icon: <LogIn size={18} /> },
+    ];
+
+    return (
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+        {/* Sidebar */}
+        <div className="w-64 bg-slate-900 text-white flex flex-col shadow-xl hidden md:flex">
+          <div className="p-5 font-black text-xl border-b border-slate-800 flex items-center text-blue-400">
+            <Settings className="mr-2"/> ÁREA RESTRITA
+          </div>
+          <div className="flex-1 overflow-y-auto py-2">
+            {menus.map(m => (
+              <button key={m.id} onClick={() => { if(m.id==='home') setIsAdmin(false); setRoute(m.id); }}
+                className={`w-full flex items-center px-6 py-3 text-left transition-colors text-sm ${route === m.id ? 'bg-slate-800 border-l-4 border-blue-500 font-bold' : 'hover:bg-slate-800 text-gray-400'}`}>
+                <span className="mr-3">{m.icon}</span> {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {/* Main Content Admin */}
+        <div className="flex-1 flex flex-col h-full overflow-y-auto">
+          <div className="md:hidden bg-slate-900 text-white p-3 flex justify-between items-center shadow-md">
+             <span className="font-bold">Painel Admin</span>
+             <select onChange={(e) => { if(e.target.value === 'home') setIsAdmin(false); setRoute(e.target.value); }} value={route} className="bg-slate-800 border-none rounded p-1 text-sm outline-none text-white">
+               {menus.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+             </select>
+          </div>
+          
+          <div className="p-6 w-full max-w-7xl mx-auto">
+            {route === 'admin_dashboard' && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-blue-500">
+                  <p className="text-gray-500 text-xs font-bold uppercase">Atletas Aprovados</p>
+                  <p className="text-3xl font-black text-blue-900 mt-1">{atletas.length}</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-yellow-500">
+                  <p className="text-gray-500 text-xs font-bold uppercase">Inscrições Pend.</p>
+                  <p className="text-3xl font-black text-yellow-600 mt-1">{inscricoes.filter(i=>i.status==='Pendente').length}</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-green-500">
+                  <p className="text-gray-500 text-xs font-bold uppercase">Equipes</p>
+                  <p className="text-3xl font-black text-green-600 mt-1">{equipes.length}</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow border-l-4 border-purple-500">
+                  <p className="text-gray-500 text-xs font-bold uppercase">Jogos Finalizados</p>
+                  <p className="text-3xl font-black text-purple-600 mt-1">{partidas.filter(p=>p.status==='Finalizado').length}</p>
+                </div>
+              </div>
+            )}
+            {route === 'admin_inscricoes' && <AdminInscricoes inscricoes={inscricoes} showToast={showToast} />}
+            {route === 'admin_sorteio' && <AdminSorteio atletas={atletas} equipes={equipes} showToast={showToast} />}
+            {route === 'admin_equipes' && <AdminEquipes equipes={equipes} showToast={showToast} />}
+            {route === 'admin_partidas' && <AdminPartidas partidas={partidas} equipes={equipes} showToast={showToast} />}
+            {route === 'admin_stats' && <AdminEstatisticas atletas={atletas} equipes={equipes} showToast={showToast} />}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Main Render Logic
+  return (
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-900 flex flex-col">
+      {toast.show && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({show: false})} />}
+      {(!isAdmin && route !== 'admin_login') && renderPublicNav()}
+
+      <main className={`flex-1 ${!isAdmin ? 'bg-gradient-to-b from-gray-50 to-blue-50' : ''}`}>
+        
+        {/* Rotas Públicas */}
+        {!isAdmin && route === 'home' && <HomePublic setRoute={setRoute} />}
+        {!isAdmin && route.startsWith('inscricao_') && (
+          <div className="p-4 mb-10 animate-fade-in"><FormularioInscricao user={user} showToast={showToast} categoriaPreSelecionada={route.replace('inscricao_', '').toUpperCase().replace('SUB', 'SUB-')} /></div>
+        )}
+        {!isAdmin && route === 'classificacao' && <ClassificacaoPublic partidas={partidas} equipes={equipes} />}
+        {!isAdmin && route === 'tabela' && <TabelaPublic partidas={partidas} equipes={equipes} />}
+        {!isAdmin && route === 'estatisticas' && <EstatisticasPublic atletas={atletas} equipes={equipes} />}
+        
+        {/* Login Admin */}
+        {!isAdmin && route === 'admin_login' && (
+          <div className="flex items-center justify-center h-[80vh] p-4 animate-fade-in">
+            <form onSubmit={handleLogin} className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full border border-gray-100">
+              <div className="flex justify-center mb-6"><Shield size={48} className="text-slate-800"/></div>
+              <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Acesso Restrito</h2>
+              <input type="text" value={adminUser} onChange={e=>setAdminUser(e.target.value)} placeholder="Usuário" required
+                className="w-full p-3 mb-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+              <input type="password" value={adminPass} onChange={e=>setAdminPass(e.target.value)} placeholder="Senha" required
+                className="w-full p-3 mb-6 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+              <button type="submit" className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-4 rounded-lg transition-colors">
+                Entrar no Sistema
+              </button>
+              <button type="button" onClick={()=>setRoute('home')} className="w-full mt-4 text-gray-500 hover:text-gray-800 text-sm">Voltar ao site</button>
+            </form>
+          </div>
+        )}
+
+        {/* Rotas Admin */}
+        {isAdmin && renderAdminLayout()}
+      </main>
+      
+      {!isAdmin && (
+        <footer className="bg-blue-900 text-blue-200 py-6 text-center text-sm">
+          <p className="font-bold">Projeto Cruzeirinho — Bom de Bola, Bom na Escola</p>
+          <p className="mt-1 opacity-75">Sistema de Gestão Esportiva</p>
+        </footer>
+      )}
+    </div>
+  );
+}
