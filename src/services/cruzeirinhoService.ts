@@ -8,6 +8,13 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
+function resolveUrl(path: string): string {
+  if (typeof window === 'undefined') {
+    return `http://localhost:3000${path}`;
+  }
+  return path;
+}
+
 export interface Inscrição {
   id: string;
   codigoInscricao?: string; // Ex: CRUZ-2026-X8K2
@@ -244,10 +251,10 @@ function sanitizarDados(raw: any): CruzeirinhoData {
   }));
 
   return {
-    atletas: atletas.length > 0 ? atletas : seed.atletas,
+    atletas: Array.isArray(raw?.atletas) ? atletas : seed.atletas,
     inscricoes,
     equipes: equipes.length > 0 ? equipes : seed.equipes,
-    partidas: partidas.length > 0 ? partidas : seed.partidas,
+    partidas: Array.isArray(raw?.partidas) ? partidas : seed.partidas,
   };
 }
 
@@ -255,7 +262,7 @@ function sanitizarDados(raw: any): CruzeirinhoData {
 export async function carregarDadosCompletos(): Promise<CruzeirinhoData> {
   // Tentativa 1: API local/Cloud Run
   try {
-    const res = await fetch('/api/cruzeirinho/data', { credentials: 'include' });
+    const res = await fetch(resolveUrl('/api/cruzeirinho/data'), { credentials: 'include' });
     if (res.ok) {
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
@@ -301,6 +308,34 @@ export async function carregarDadosCompletos(): Promise<CruzeirinhoData> {
       const data = d.data();
       if (data) partidas.push({ ...data, id: data.id || d.id } as Partida);
     });
+
+    // Se o Firestore tiver equipes mas a coleção partidas estiver vazia, inicializar partidas oficiais
+    if (snapPart.empty && equipes.length > 0) {
+      console.log('[Cruzeirinho] Coleção partidas vazia no Firestore. Inicializando partidas oficiais...');
+      const seed = getDadosIniciais();
+      try {
+        const batch = writeBatch(db);
+        seed.partidas.forEach(pt => batch.set(doc(db, 'partidas', pt.id), pt));
+        await batch.commit();
+        partidas.push(...seed.partidas);
+      } catch (e) {
+        console.warn('[Cruzeirinho] Erro ao sincronizar seed de partidas no Firestore:', e);
+      }
+    }
+
+    // Se o Firestore tiver equipes mas a coleção atletas estiver vazia, inicializar atletas oficiais
+    if (snapAtl.empty && equipes.length > 0) {
+      console.log('[Cruzeirinho] Coleção atletas vazia no Firestore. Inicializando atletas oficiais...');
+      const seed = getDadosIniciais();
+      try {
+        const batch = writeBatch(db);
+        seed.atletas.forEach(at => batch.set(doc(db, 'atletas', at.id), at));
+        await batch.commit();
+        atletas.push(...seed.atletas);
+      } catch (e) {
+        console.warn('[Cruzeirinho] Erro ao sincronizar seed de atletas no Firestore:', e);
+      }
+    }
 
     // Se o Firestore estiver vazio (ex: novo deploy no Vercel), inicializar com os dados oficiais
     if (equipes.length === 0 && atletas.length === 0) {
@@ -447,52 +482,101 @@ export async function excluirInscricao(id: string): Promise<void> {
 
 // 5. ATLETAS: CRIAR / EDITAR / EXCLUIR
 export async function salvarAtleta(atleta: Atleta, isNovo = false): Promise<void> {
+  // 1. Grava no Cloud Firestore (persistência permanente)
   try {
-    const url = isNovo ? '/api/cruzeirinho/atletas/novo' : `/api/cruzeirinho/atletas/${atleta.id}`;
+    await setDoc(doc(db, 'atletas', atleta.id), atleta, { merge: true });
+  } catch (e) {
+    console.warn('[Cruzeirinho] Erro ao salvar atleta diretamente no Firestore:', e);
+  }
+
+  // 2. Sincroniza com a API do servidor
+  try {
+    const url = isNovo ? resolveUrl('/api/cruzeirinho/atletas/novo') : resolveUrl(`/api/cruzeirinho/atletas/${atleta.id}`);
     const method = isNovo ? 'POST' : 'PUT';
-    const res = await fetch(url, {
+    await fetch(url, {
       method,
       headers: getAdminAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify(atleta),
     });
-    if (res.ok) return;
-  } catch {
-    // Vercel fallback
+  } catch (err) {
+    console.warn('[Cruzeirinho] API indisponível para salvar atleta:', err);
   }
-
-  await setDoc(doc(db, 'atletas', atleta.id), atleta, { merge: true });
 }
 
 export async function excluirAtleta(id: string): Promise<void> {
+  let firestoreDeleted = false;
+  let apiDeleted = false;
+  let errorMsg = '';
+
+  // 1. Exclusão direta no Cloud Firestore (garantia de persistência permanente)
   try {
-    const res = await fetch(`/api/cruzeirinho/atletas/${id}`, {
+    await deleteDoc(doc(db, 'atletas', id));
+    firestoreDeleted = true;
+  } catch (err: any) {
+    console.warn('[Cruzeirinho] Aviso ao excluir atleta no Firestore:', err?.message || err);
+    errorMsg = err?.message || '';
+  }
+
+  // 2. Exclusão via API do servidor (sincronização do estado em memória e arquivo local)
+  try {
+    const res = await fetch(resolveUrl(`/api/cruzeirinho/atletas/${id}`), {
       method: 'DELETE',
       headers: getAdminAuthHeaders(),
       credentials: 'include',
     });
-    if (res.ok) return;
-  } catch {
-    // Vercel fallback
+    if (res.ok) {
+      apiDeleted = true;
+    } else if (res.status !== 404) {
+      const errJson = await res.json().catch(() => ({}));
+      errorMsg = errJson.error || `Erro HTTP ${res.status}`;
+    } else {
+      apiDeleted = true;
+    }
+  } catch (err: any) {
+    console.warn('[Cruzeirinho] API indisponível para exclusão do atleta:', err);
   }
 
-  await deleteDoc(doc(db, 'atletas', id));
+  if (!firestoreDeleted && !apiDeleted) {
+    throw new Error(errorMsg || 'Não foi possível excluir o atleta. Verifique a conexão com o banco de dados.');
+  }
 }
 
 export async function atualizarAtletaParcial(id: string, dados: Partial<Atleta>): Promise<void> {
+  let firestoreUpdated = false;
+  let apiUpdated = false;
+  let errorMsg = '';
+
+  // 1. Grava no Cloud Firestore
   try {
-    const res = await fetch(`/api/cruzeirinho/atletas/${id}`, {
+    await setDoc(doc(db, 'atletas', id), dados, { merge: true });
+    firestoreUpdated = true;
+  } catch (err: any) {
+    console.warn('[Cruzeirinho] Aviso ao atualizar atleta no Firestore:', err?.message || err);
+    errorMsg = err?.message || '';
+  }
+
+  // 2. Sincroniza via API do servidor
+  try {
+    const res = await fetch(resolveUrl(`/api/cruzeirinho/atletas/${id}`), {
       method: 'PUT',
       headers: getAdminAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify(dados),
     });
-    if (res.ok) return;
-  } catch {
-    // Vercel fallback
+    if (res.ok) {
+      apiUpdated = true;
+    } else {
+      const errJson = await res.json().catch(() => ({}));
+      errorMsg = errJson.error || `Erro HTTP ${res.status}`;
+    }
+  } catch (err: any) {
+    console.warn('[Cruzeirinho] API indisponível para atualização do atleta:', err);
   }
 
-  await setDoc(doc(db, 'atletas', id), dados, { merge: true });
+  if (!firestoreUpdated && !apiUpdated) {
+    throw new Error(errorMsg || 'Não foi possível atualizar o atleta no banco de dados.');
+  }
 }
 
 // 6. EQUIPES: CRIAR / EDITAR / EXCLUIR
@@ -531,36 +615,63 @@ export async function excluirEquipe(id: string): Promise<void> {
 
 // 7. PARTIDAS: SALVAR / EXCLUIR
 export async function salvarPartida(partida: Partida, isNovo = false): Promise<void> {
+  // 1. Grava no Cloud Firestore (persistência em nuvem imediata)
   try {
-    const url = isNovo ? '/api/cruzeirinho/partidas' : `/api/cruzeirinho/partidas/${partida.id}`;
+    await setDoc(doc(db, 'partidas', partida.id), partida, { merge: true });
+  } catch (e) {
+    console.warn('[Cruzeirinho] Erro ao salvar diretamente no Firestore:', e);
+  }
+
+  // 2. Sincroniza com a API do backend
+  try {
+    const url = isNovo ? resolveUrl('/api/cruzeirinho/partidas') : resolveUrl(`/api/cruzeirinho/partidas/${partida.id}`);
     const method = isNovo ? 'POST' : 'PUT';
-    const res = await fetch(url, {
+    await fetch(url, {
       method,
       headers: getAdminAuthHeaders(),
       credentials: 'include',
       body: JSON.stringify(partida),
     });
-    if (res.ok) return;
-  } catch {
-    // Vercel fallback
+  } catch (err) {
+    console.warn('[Cruzeirinho] API indisponível:', err);
   }
-
-  await setDoc(doc(db, 'partidas', partida.id), partida, { merge: true });
 }
 
 export async function excluirPartida(id: string): Promise<void> {
+  let firestoreDeleted = false;
+  let apiDeleted = false;
+  let errorMsg = '';
+
+  // 1. Exclusão direta no Cloud Firestore (garantia de persistência permanente)
   try {
-    const res = await fetch(`/api/cruzeirinho/partidas/${id}`, {
+    await deleteDoc(doc(db, 'partidas', id));
+    firestoreDeleted = true;
+  } catch (err: any) {
+    console.warn('[Cruzeirinho] Aviso ao excluir diretamente no Firestore:', err?.message || err);
+    errorMsg = err?.message || '';
+  }
+
+  // 2. Exclusão via API do servidor (sincronização do estado em memória e arquivo local)
+  try {
+    const res = await fetch(resolveUrl(`/api/cruzeirinho/partidas/${id}`), {
       method: 'DELETE',
       headers: getAdminAuthHeaders(),
       credentials: 'include',
     });
-    if (res.ok) return;
-  } catch {
-    // Vercel fallback
+    if (res.ok) {
+      apiDeleted = true;
+    } else if (res.status !== 404) {
+      const data = await res.json().catch(() => ({}));
+      if (data?.error) errorMsg = data.error;
+    }
+  } catch (err: any) {
+    console.warn('[Cruzeirinho] API de backend indisponível para exclusão de partida:', err?.message || err);
   }
 
-  await deleteDoc(doc(db, 'partidas', id));
+  // Se falhou no Firestore e também falhou na API, lança erro para alertar o usuário
+  if (!firestoreDeleted && !apiDeleted) {
+    throw new Error(errorMsg || 'Não foi possível excluir o jogo do banco de dados.');
+  }
 }
 
 // 8. DRAFT / SORTEIO EQUILIBRADO (Snake Draft de Potes 5 a 1)
@@ -679,20 +790,28 @@ export async function resetarParaSeedOficial(): Promise<void> {
 // --- ADMIN TOKEN & SESSÃO PERSISTENTE ---
 const ADMIN_TOKEN_KEY = 'cruzeirinho_admin_token';
 
+let memoryAdminToken: string | null = null;
+
 export function getStoredToken(): string | null {
   try {
-    return localStorage.getItem(ADMIN_TOKEN_KEY);
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem(ADMIN_TOKEN_KEY) || memoryAdminToken;
+    }
+    return memoryAdminToken;
   } catch {
-    return null;
+    return memoryAdminToken;
   }
 }
 
 export function setStoredToken(token: string | null) {
+  memoryAdminToken = token;
   try {
-    if (token) {
-      localStorage.setItem(ADMIN_TOKEN_KEY, token);
-    } else {
-      localStorage.removeItem(ADMIN_TOKEN_KEY);
+    if (typeof localStorage !== 'undefined') {
+      if (token) {
+        localStorage.setItem(ADMIN_TOKEN_KEY, token);
+      } else {
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+      }
     }
   } catch {
     // ignore storage restrictions
@@ -714,7 +833,7 @@ export function getAdminAuthHeaders(extraHeaders: Record<string, string> = {}): 
 // 11. AUTENTICAÇÃO ADMINISTRATIVA
 export async function loginAdmin(username: string, password: string): Promise<{ success: boolean; token?: string; error?: string }> {
   try {
-    const res = await fetch('/api/auth/login', {
+    const res = await fetch(resolveUrl('/api/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -736,7 +855,7 @@ export async function loginAdmin(username: string, password: string): Promise<{ 
 
 export async function checkAdminSession(): Promise<{ authenticated: boolean; username?: string; token?: string }> {
   try {
-    const res = await fetch('/api/auth/me', {
+    const res = await fetch(resolveUrl('/api/auth/me'), {
       headers: getAdminAuthHeaders(),
       credentials: 'include',
     });

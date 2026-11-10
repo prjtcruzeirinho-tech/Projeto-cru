@@ -512,14 +512,62 @@ async function syncWithFirestore() {
       const inscricoes: Inscrição[] = [];
       inscSnap.forEach((d) => inscricoes.push(d.data() as Inscrição));
 
-      const atletas: Atleta[] = [];
-      atlSnap.forEach((d) => atletas.push(d.data() as Atleta));
+      let atletas: Atleta[] = [];
+      if (atlSnap.empty) {
+        console.log('[Cruzeirinho Server] Coleção atletas vazia no Firestore. Gravando atletas iniciais e inscrições aprovadas...');
+        const seedAtletas = getInitialDatabase().atletas;
+        inscricoes.forEach((i) => {
+          if (i.status === 'Pagamento Aprovado' || i.status === 'Aprovada' || i.status === 'Inscrição Confirmada' || i.pagamentoPixConfirmado) {
+            const atletaId = `atl-insc-${i.id}`;
+            const atletaInsc: Atleta = {
+              id: atletaId,
+              nome: i.nome,
+              categoria: i.categoria,
+              responsavel: i.responsavel,
+              tipo: i.tipo,
+              equipeId: null,
+              gols: 0,
+              assistencias: 0,
+              nota: i.nota || 3,
+            };
+            if (!seedAtletas.some(sa => sa.nome.toLowerCase() === i.nome.toLowerCase())) {
+              seedAtletas.push(atletaInsc);
+            }
+          }
+        });
+
+        if (firestoreDb) {
+          const batch = writeBatch(firestoreDb);
+          seedAtletas.forEach((a) => batch.set(doc(firestoreDb!, 'atletas', a.id), a));
+          await batch.commit().catch((e) => console.error('[Cruzeirinho Server] Erro ao gravar atletas no Firestore:', e));
+        }
+        atletas = seedAtletas;
+      } else {
+        atlSnap.forEach((d) => {
+          const data = d.data() as Atleta;
+          atletas.push({ ...data, id: data.id || d.id });
+        });
+      }
 
       const equipes: Equipe[] = [];
       eqSnap.forEach((d) => equipes.push(d.data() as Equipe));
 
-      const partidas: Partida[] = [];
-      partSnap.forEach((d) => partidas.push(d.data() as Partida));
+      let partidas: Partida[] = [];
+      if (partSnap.empty) {
+        console.log('[Cruzeirinho Server] Coleção partidas vazia no Firestore. Gravando partidas oficiais...');
+        const seedPartidas = getInitialDatabase().partidas;
+        if (firestoreDb) {
+          const batch = writeBatch(firestoreDb);
+          seedPartidas.forEach((p) => batch.set(doc(firestoreDb!, 'partidas', p.id), p));
+          await batch.commit().catch((e) => console.error('[Cruzeirinho Server] Erro ao gravar partidas no Firestore:', e));
+        }
+        partidas = seedPartidas;
+      } else {
+        partSnap.forEach((d) => {
+          const data = d.data() as Partida;
+          partidas.push({ ...data, id: data.id || d.id });
+        });
+      }
 
       // Ordenar inscrições por data mais recente
       inscricoes.sort((a, b) => new Date(b.dataEnvio || 0).getTime() - new Date(a.dataEnvio || 0).getTime());
@@ -1332,45 +1380,78 @@ app.delete('/api/cruzeirinho/equipes/:id', requireAdmin, (req, res) => {
 });
 
 // DELETE /api/cruzeirinho/atletas/:id - Delete athlete permanently (Admin only)
-app.delete('/api/cruzeirinho/atletas/:id', requireAdmin, (req, res) => {
+app.delete('/api/cruzeirinho/atletas/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  db.atletas = db.atletas.filter((a) => a.id !== id);
-  deleteFirestoreDoc('atletas', id);
-  saveDatabase(db);
-  res.json({ success: true });
+  try {
+    db.atletas = db.atletas.filter((a) => a.id !== id);
+    if (firestoreDb) {
+      await deleteDoc(doc(firestoreDb, 'atletas', id));
+    }
+    saveDatabase(db);
+    res.json({ success: true, id });
+  } catch (err: any) {
+    console.error(`[Cruzeirinho Server] Erro ao excluir atleta ${id}:`, err);
+    res.status(500).json({ error: 'Erro ao excluir atleta do banco de dados' });
+  }
 });
 
 // POST /api/cruzeirinho/atletas/novo - Create athlete manually (Admin only)
-app.post('/api/cruzeirinho/atletas/novo', requireAdmin, (req, res) => {
-  const { nome, categoria, responsavel, equipeId, nota } = req.body;
+app.post('/api/cruzeirinho/atletas/novo', requireAdmin, async (req, res) => {
+  const { id, nome, categoria, responsavel, equipeId, nota, tipo } = req.body;
   if (!nome || !categoria) {
     return res.status(400).json({ error: 'Nome e categoria são obrigatórios' });
   }
 
+  const athleteId = id || `atl-${Date.now()}`;
   const novoAtleta: Atleta = {
-    id: `atl-${Date.now()}`,
+    id: athleteId,
     nome: nome.trim(),
     categoria,
     responsavel: responsavel ? responsavel.trim() : '',
-    tipo: 'Normal',
+    tipo: tipo || 'Normal',
     equipeId: equipeId || null,
     gols: 0,
     assistencias: 0,
     nota: nota ? Math.min(5, Math.max(1, Number(nota))) : 3,
   };
 
-  db.atletas.push(novoAtleta);
-  saveFirestoreDoc('atletas', novoAtleta.id, novoAtleta);
+  const existingIdx = db.atletas.findIndex((a) => a.id === athleteId);
+  if (existingIdx >= 0) {
+    db.atletas[existingIdx] = novoAtleta;
+  } else {
+    db.atletas.push(novoAtleta);
+  }
+
+  if (firestoreDb) {
+    try {
+      const cleanData = JSON.parse(JSON.stringify(novoAtleta));
+      await setDoc(doc(firestoreDb, 'atletas', novoAtleta.id), cleanData, { merge: true });
+    } catch (e) {
+      console.error(`[Cruzeirinho Server] Erro ao salvar atleta ${novoAtleta.id} no Firestore:`, e);
+    }
+  }
+
   saveDatabase(db);
   res.status(201).json(novoAtleta);
 });
 
 // PUT /api/cruzeirinho/atletas/:id - Update athlete info (Admin only)
-app.put('/api/cruzeirinho/atletas/:id', requireAdmin, (req, res) => {
+app.put('/api/cruzeirinho/atletas/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const atleta = db.atletas.find((a) => a.id === id);
+  let atleta = db.atletas.find((a) => a.id === id);
   if (!atleta) {
-    return res.status(404).json({ error: 'Atleta não encontrado' });
+    atleta = {
+      id,
+      nome: req.body.nome || '',
+      categoria: req.body.categoria || 'SUB-9',
+      responsavel: req.body.responsavel || '',
+      tipo: req.body.tipo || 'Normal',
+      equipeId: null,
+      gols: 0,
+      assistencias: 0,
+      nota: 3,
+    };
+    db.atletas.push(atleta);
   }
 
   if (req.body.nome !== undefined) atleta.nome = req.body.nome.trim();
@@ -1388,7 +1469,14 @@ app.put('/api/cruzeirinho/atletas/:id', requireAdmin, (req, res) => {
     }
   }
 
-  saveFirestoreDoc('atletas', atleta.id, atleta);
+  if (firestoreDb) {
+    try {
+      const cleanData = JSON.parse(JSON.stringify(atleta));
+      await setDoc(doc(firestoreDb, 'atletas', atleta.id), cleanData, { merge: true });
+    } catch (e) {
+      console.error(`[Cruzeirinho Server] Erro ao salvar atleta ${atleta.id} no Firestore:`, e);
+    }
+  }
   saveDatabase(db);
   res.json(atleta);
 });
@@ -1508,7 +1596,7 @@ app.post('/api/cruzeirinho/partidas', requireAdmin, (req, res) => {
   }
 
   const novaPartida: Partida = {
-    id: `part-${Date.now()}`,
+    id: req.body.id || `part-${Date.now()}`,
     categoria,
     data,
     horario,
@@ -1541,12 +1629,19 @@ app.put('/api/cruzeirinho/partidas/:id', requireAdmin, (req, res) => {
 });
 
 // DELETE /api/cruzeirinho/partidas/:id - Delete match (Admin only)
-app.delete('/api/cruzeirinho/partidas/:id', requireAdmin, (req, res) => {
+app.delete('/api/cruzeirinho/partidas/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  db.partidas = db.partidas.filter((p) => p.id !== id);
-  deleteFirestoreDoc('partidas', id);
-  saveDatabase(db);
-  res.json({ success: true });
+  try {
+    db.partidas = db.partidas.filter((p) => p.id !== id);
+    if (firestoreDb) {
+      await deleteDoc(doc(firestoreDb, 'partidas', id));
+    }
+    saveDatabase(db);
+    res.json({ success: true, id });
+  } catch (err: any) {
+    console.error(`[Cruzeirinho Server] Erro ao excluir partida ${id}:`, err);
+    res.status(500).json({ error: 'Erro ao excluir partida do banco de dados' });
+  }
 });
 
 // POST /api/cruzeirinho/reset-seed - Reset to factory seed data (Admin only)

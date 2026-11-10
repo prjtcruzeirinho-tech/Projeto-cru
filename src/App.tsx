@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Menu, X, Home, CalendarDays, ClipboardEdit, LogIn, Users, 
   Shield, CheckCircle, XCircle, Settings, Trash2, Edit, Save, Plus,
-  Trophy, Goal, UsersRound, Shuffle, Activity, UserPlus, Search,
+  Trophy, Goal, UsersRound, Shuffle, Activity, UserPlus, UserMinus, Search,
   Award, Sparkles, RefreshCw, AlertCircle, Phone, Calendar, ArrowRight,
   ChevronRight, Check, Star, Download, Share2, Copy, Smartphone,
   Flame, BarChart3, ChevronDown, ChevronUp, AlertTriangle, QrCode, CreditCard, Lock,
@@ -2675,12 +2675,14 @@ const AdminAtletas = ({
   showToast, 
   onRefresh,
   requestConfirm,
+  setAtletas,
 }: { 
   atletas: Atleta[]; 
   equipes: Equipe[]; 
   showToast: (m: string, t?: string) => void; 
   onRefresh: () => void;
   requestConfirm: (title: string, message: string, action: () => void) => void;
+  setAtletas?: React.Dispatch<React.SetStateAction<Atleta[]>>;
 }) => {
   const [busca, setBusca] = useState('');
   const [filtroCat, setFiltroCat] = useState<'TODAS' | 'SUB-9' | 'SUB-11' | 'SUB-16'>('TODAS');
@@ -2697,18 +2699,34 @@ const AdminAtletas = ({
 
   const handleExcluirAtleta = (id: string, nome: string) => {
     requestConfirm(
-      'Excluir Jogador',
-      `Deseja realmente excluir o jogador "${nome}" permanentemente do campeonato?`,
+      'Excluir Jogador Permanentemente',
+      `ATENÇÃO: Deseja realmente excluir o jogador "${nome}" permanentemente do campeonato?\n\n(Dica: Se você deseja apenas desvincular o jogador de uma equipe e deixá-lo disponível no Draft, utilize a opção "Remover da equipe".)`,
       async () => {
         try {
           await excluirAtleta(id);
+          if (setAtletas) {
+            setAtletas(prev => prev.filter(a => a.id !== id));
+          }
+          await onRefresh();
           showToast(`Jogador "${nome}" excluído com sucesso!`);
-          onRefresh();
-        } catch {
-          showToast('Erro ao excluir jogador', 'error');
+        } catch (err: any) {
+          showToast(err?.message || 'Erro ao excluir jogador', 'error');
         }
       }
     );
+  };
+
+  const handleRemoverDaEquipe = async (id: string, nome: string) => {
+    try {
+      await atualizarAtletaParcial(id, { equipeId: null });
+      if (setAtletas) {
+        setAtletas(prev => prev.map(a => a.id === id ? { ...a, equipeId: null } : a));
+      }
+      await onRefresh();
+      showToast(`Jogador "${nome}" retirado da equipe e disponível para o Draft!`);
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao retirar jogador da equipe.', 'error');
+    }
   };
 
   const handleQuickUpdateNota = async (id: string, novaNota: number, nome: string) => {
@@ -2893,7 +2911,18 @@ const AdminAtletas = ({
                     </td>
                     <td className="p-3.5 text-center">
                       <div className="flex items-center justify-center gap-1.5">
+                        {a.equipeId && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoverDaEquipe(a.id, a.nome || 'Jogador')}
+                            className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg transition-colors cursor-pointer"
+                            title="Remover da equipe (manter no campeonato e retornar ao Draft)"
+                          >
+                            <UserMinus size={16} />
+                          </button>
+                        )}
                         <button
+                          type="button"
                           onClick={() => setEditingAtleta(a)}
                           className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors cursor-pointer"
                           title="Editar dados do jogador"
@@ -2901,9 +2930,10 @@ const AdminAtletas = ({
                           <Edit size={16} />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleExcluirAtleta(a.id, a.nome || 'Jogador')}
                           className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors cursor-pointer"
-                          title="Excluir jogador permanentemente"
+                          title="Excluir jogador permanentemente do campeonato"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -3572,12 +3602,14 @@ const AdminSorteio = ({
   showToast, 
   onRefresh,
   requestConfirm,
+  setAtletas,
 }: { 
   atletas: Atleta[]; 
   equipes: Equipe[]; 
   showToast: (m: string, t?: string) => void; 
   onRefresh: () => void;
   requestConfirm: (title: string, message: string, action: () => void) => void;
+  setAtletas?: React.Dispatch<React.SetStateAction<Atleta[]>>;
 }) => {
   const [categoria, setCategoria] = useState<'SUB-9' | 'SUB-11' | 'SUB-16'>('SUB-9');
   const [modoDraft, setModoDraft] = useState<'equilibrado' | 'aleatorio'>('equilibrado');
@@ -3615,7 +3647,7 @@ const AdminSorteio = ({
     try {
       await atualizarAtletaParcial(atletaId, { nota: novaNota });
       showToast(`Nota ${novaNota} atribuída para ${nome}! Atleta remanejado no Draft.`);
-      onRefresh();
+      await onRefresh();
     } catch {
       showToast('Erro ao atualizar nota do atleta', 'error');
     }
@@ -3627,7 +3659,7 @@ const AdminSorteio = ({
       await atualizarAtletaParcial(atletaId, { equipeId });
       const equipe = equipes.find(e => e.id === equipeId);
       showToast(`${nomeAtleta} escalado no ${equipe?.nome || 'time'}!`);
-      onRefresh();
+      await onRefresh();
     } catch {
       showToast('Erro ao escalar atleta', 'error');
     }
@@ -3636,23 +3668,33 @@ const AdminSorteio = ({
   const handleRemoverDaEquipe = async (atletaId: string, nomeAtleta: string) => {
     try {
       await atualizarAtletaParcial(atletaId, { equipeId: null });
-      showToast(`${nomeAtleta} retornou para a lista do Draft.`);
-      onRefresh();
-    } catch {
-      showToast('Erro ao liberar atleta.', 'error');
+      if (setAtletas) {
+        setAtletas(prev => prev.map(a => a.id === atletaId ? { ...a, equipeId: null } : a));
+      }
+      await onRefresh();
+      showToast(`"${nomeAtleta}" foi retirado da equipe e está disponível para novo sorteio!`);
+    } catch (err: any) {
+      showToast(err?.message || 'Erro ao liberar atleta.', 'error');
     }
   };
 
   const handleExcluirAtleta = (atletaId: string, nome: string) => {
-    requestConfirm('Excluir Atleta', `Excluir permanentemente o atleta "${nome}" do campeonato?`, async () => {
-      try {
-        await excluirAtleta(atletaId);
-        showToast(`Atleta "${nome}" excluído com sucesso!`);
-        onRefresh();
-      } catch {
-        showToast('Erro ao excluir atleta.', 'error');
+    requestConfirm(
+      'Excluir Atleta Permanentemente',
+      `ATENÇÃO: Deseja realmente excluir permanentemente o atleta "${nome}" do campeonato?\n\n(Dica: Se você deseja apenas desvincular o atleta desta equipe e deixá-lo disponível no Draft, utilize o botão "Remover da equipe".)`,
+      async () => {
+        try {
+          await excluirAtleta(atletaId);
+          if (setAtletas) {
+            setAtletas(prev => prev.filter(a => a.id !== atletaId));
+          }
+          await onRefresh();
+          showToast(`Atleta "${nome}" excluído com sucesso!`);
+        } catch (err: any) {
+          showToast(err?.message || 'Erro ao excluir atleta.', 'error');
+        }
       }
-    });
+    );
   };
 
   const handleZerarEscalacoes = () => {
@@ -4031,18 +4073,21 @@ const AdminSorteio = ({
                           <StarRating value={a.nota || 3} readOnly size={11} />
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button 
+                          type="button"
                           onClick={() => handleRemoverDaEquipe(a.id, a.nome)} 
-                          className="text-amber-600 hover:bg-amber-50 p-1.5 rounded-lg cursor-pointer" 
-                          title="Liberar da equipe (voltar para o Draft)"
+                          className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg cursor-pointer transition-colors" 
+                          title="Remover atleta da equipe (permanece no campeonato e retorna ao Draft)"
                         >
-                          <X size={15} />
+                          <UserMinus size={13} />
+                          <span>Remover da equipe</span>
                         </button>
                         <button 
+                          type="button"
                           onClick={() => handleExcluirAtleta(a.id, a.nome)} 
-                          className="text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg cursor-pointer" 
-                          title="Excluir atleta permanentemente"
+                          className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded-lg cursor-pointer transition-colors" 
+                          title="Excluir atleta permanentemente do campeonato"
                         >
                           <Trash2 size={15} />
                         </button>
@@ -4304,12 +4349,14 @@ const AdminPartidas = ({
   showToast, 
   onRefresh,
   requestConfirm,
+  setPartidas,
 }: { 
   partidas: Partida[]; 
   equipes: Equipe[]; 
   showToast: (m: string, t?: string) => void;
-  onRefresh: () => void;
+  onRefresh: () => Promise<void> | void;
   requestConfirm: (title: string, message: string, action: () => void) => void;
+  setPartidas?: React.Dispatch<React.SetStateAction<Partida[]>>;
 }) => {
   const [novoJogo, setNovoJogo] = useState({ 
     categoria: 'SUB-9' as 'SUB-9' | 'SUB-11' | 'SUB-16', 
@@ -4344,7 +4391,7 @@ const AdminPartidas = ({
       }, true);
       showToast('Partida agendada com sucesso!');
       setNovoJogo({ ...novoJogo, data: '', horario: '', mandanteId: '', visitanteId: '' });
-      onRefresh();
+      await onRefresh();
     } catch {
       showToast('Erro ao agendar partida', 'error');
     }
@@ -4362,7 +4409,7 @@ const AdminPartidas = ({
         });
       }
       showToast('Placar salvo e classificação atualizada!');
-      onRefresh();
+      await onRefresh();
     } catch {
       showToast('Erro ao salvar placar', 'error');
     }
@@ -4372,10 +4419,14 @@ const AdminPartidas = ({
     requestConfirm('Excluir Partida', 'Excluir esta partida do calendário oficial?', async () => {
       try {
         await excluirPartida(id);
-        showToast('Partida excluída!');
-        onRefresh();
-      } catch {
-        showToast('Erro ao excluir', 'error');
+        if (setPartidas) {
+          setPartidas(prev => prev.filter(p => p.id !== id));
+        }
+        await onRefresh();
+        showToast('Partida excluída com sucesso!');
+      } catch (err: any) {
+        console.error('Erro ao excluir partida:', err);
+        showToast('Não foi possível excluir o jogo. Tente novamente.', 'error');
       }
     });
   };
@@ -5554,27 +5605,30 @@ export default function App() {
     }, (err) => console.log('Firestore inscricoes listener:', err.message));
 
     const unsubAtl = onSnapshot(collection(db, 'atletas'), (snap) => {
-      if (!snap.empty) {
-        const list: Atleta[] = [];
-        snap.forEach((d) => list.push(d.data() as Atleta));
-        setAtletas(list);
-      }
+      const list: Atleta[] = [];
+      snap.forEach((d) => {
+        const data = d.data() as Atleta;
+        if (data) list.push({ ...data, id: data.id || d.id });
+      });
+      setAtletas(list);
     }, (err) => console.log('Firestore atletas listener:', err.message));
 
     const unsubEq = onSnapshot(collection(db, 'equipes'), (snap) => {
-      if (!snap.empty) {
-        const list: Equipe[] = [];
-        snap.forEach((d) => list.push(d.data() as Equipe));
-        setEquipes(list);
-      }
+      const list: Equipe[] = [];
+      snap.forEach((d) => {
+        const data = d.data() as Equipe;
+        if (data) list.push({ ...data, id: data.id || d.id });
+      });
+      setEquipes(list);
     }, (err) => console.log('Firestore equipes listener:', err.message));
 
     const unsubPart = onSnapshot(collection(db, 'partidas'), (snap) => {
-      if (!snap.empty) {
-        const list: Partida[] = [];
-        snap.forEach((d) => list.push(d.data() as Partida));
-        setPartidas(list);
-      }
+      const list: Partida[] = [];
+      snap.forEach((d) => {
+        const data = d.data() as Partida;
+        if (data) list.push({ ...data, id: data.id || d.id });
+      });
+      setPartidas(list);
     }, (err) => console.log('Firestore partidas listener:', err.message));
 
     return () => {
@@ -6199,6 +6253,7 @@ export default function App() {
                 showToast={showToast} 
                 onRefresh={carregarDados} 
                 requestConfirm={requestConfirm}
+                setAtletas={setAtletas}
               />
             )}
             {route === 'admin_sorteio' && (
@@ -6208,6 +6263,7 @@ export default function App() {
                 showToast={showToast} 
                 onRefresh={carregarDados} 
                 requestConfirm={requestConfirm}
+                setAtletas={setAtletas}
               />
             )}
             {route === 'admin_equipes' && (
@@ -6225,6 +6281,7 @@ export default function App() {
                 showToast={showToast} 
                 onRefresh={carregarDados} 
                 requestConfirm={requestConfirm}
+                setPartidas={setPartidas}
               />
             )}
             {route === 'admin_stats' && (
